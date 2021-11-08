@@ -5,7 +5,6 @@
 # <UDF name="AWS_REGION" Label="AWS Region" default="ap-southeast-2" />
 # <UDF name="MYSQL_ROOT_PASSWORD" Label="MySQL root user password" />
 # <UDF name="MYSQL_PORT" Label="MySQL port" default="3306" />
-# <UDF name="MYSQL_DATABASE" Label="MySQL database schema name" />
 # <UDF name="TIMEZONE" Label="Your timezone" example="Australia/Sydney (see a list at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)" default="Etc/UTC" />
 # <UDF name="ALLOWED_IP_ADDRESSES" Label="MySQL allowed_ip_addresses" />
 
@@ -116,7 +115,6 @@ function mysql_install() {
     y # Remove test database and access to it?
     y # Reload privilege tables now?
 EOF
-    echo "CREATE DATABASE ${MYSQL_DATABASE};" | mysql -u root -p"${MYSQL_ROOT_PASSWORD}"
     # allowed remote incoming connections
     sed -i "s|.*bind-address\s*=.*|bind-address=0.0.0.0|g" /etc/mysql/my.cnf
     # dont search for hostnames (performance)
@@ -138,8 +136,20 @@ EOF
         [ $val -lt 4 ] && val=4
         config="${config}\n${optlist[$i]} = ${val}M"
     done
-    config="${config}\nskip-host-cache\nskip-name-resolve\nserver-id = 1\nlog_bin = /var/log/mysql/mysql-bin.log\nbinlog_format = ROW\nbinlog_do_db = ${MYSQL_DATABASE}"
+    config="${config}\nrelay-log = /var/log/mysql/mysql-relay-bin.log"
     sed -i -e "s/\(\[mysqld\]\)/\1\n${config}\n/" /etc/mysql/my.cnf
+}
+function mysql_create_database {
+    [ ! -n "$1" ] && {
+        printf "mysql_create_database() requires the root pass as its first argument\n"
+        return 1;
+    }
+    [ ! -n "$2" ] && {
+        printf "mysql_create_database() requires the name of the database as the second argument\n"
+        return 1;
+    }
+    local -r db_root_password="$1" db_name="$2"
+    echo "CREATE DATABASE ${db_name};" | mysql -u root -p"$db_root_pas{sword"
 }
 function mysql_create_user {
     [ ! -n "$1" ] && {

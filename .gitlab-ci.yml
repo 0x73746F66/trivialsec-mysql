@@ -50,12 +50,11 @@ tf:apply:
       - main
   environment:
     name: linode
-    url: https://cloud.linode.com/search/?query=label:forward-proxy
+    url: https://cloud.linode.com/search/?query=label:mysql
     on_stop: "tf:destroy"
   dependencies:
     - "tf:plan"
   when: manual
-
 
 firewall:attach:
   stage: firewall

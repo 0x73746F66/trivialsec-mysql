@@ -39,9 +39,9 @@ apply: plan ## tf apply -auto-approve -refresh=true
 	terraform apply -auto-approve -refresh=true .tfplan
 
 tail-log: ## tail the squid access log in prod
-	@$(shell ssh-keygen -R "proxy.trivialsec.com")
-	@$(shell ssh-keyscan -H "proxy.trivialsec.com" >> ~/.ssh/known_hosts)
-	ssh root@proxy.trivialsec.com tail -f /var/log/squid/access.log
+	@$(shell ssh-keygen -R "prd-main.trivialsec.com")
+	@$(shell ssh-keyscan -H "prd-main.trivialsec.com" >> ~/.ssh/known_hosts)
+	ssh root@prd-main.trivialsec.com tail -f /var/log/syslog
 
 destroy: init ## tf destroy -auto-approve
 	cd plans
@@ -54,4 +54,8 @@ attach-firewall:
 	curl -s -H "Content-Type: application/json" \
 		-H "Authorization: Bearer ${TF_VAR_linode_token}" \
 		-X POST -d '{"type": "linode", "id": $(shell curl -s -H "Authorization: Bearer ${TF_VAR_linode_token}" https://api.linode.com/v4/linode/instances | jq -r '.data[] | select(.label=="mysql-replica") | .id')}' \
+		https://api.linode.com/v4/networking/firewalls/${LINODE_FIREWALL}/devices
+	curl -s -H "Content-Type: application/json" \
+		-H "Authorization: Bearer ${TF_VAR_linode_token}" \
+		-X POST -d '{"type": "linode", "id": $(shell curl -s -H "Authorization: Bearer ${TF_VAR_linode_token}" https://api.linode.com/v4/linode/instances | jq -r '.data[] | select(.label=="mysql-main") | .id')}' \
 		https://api.linode.com/v4/networking/firewalls/${LINODE_FIREWALL}/devices

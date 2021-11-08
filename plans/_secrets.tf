@@ -17,3 +17,11 @@ variable "aws_access_key_id" {
   description = "AWS_ACCESS_KEY_ID"
   type        = string
 }
+variable "allowed_ip_addresses" { # space delimited
+  description = "ALLOWED_IP_ADDRESSES"
+  type        = string
+}
+variable "allowed_linode_username" { # space delimited
+  description = "ALLOWED_LINODE_USERNAME"
+  type        = string
+}
