@@ -10,12 +10,12 @@ provider "aws" {
 }
 
 terraform {
-    required_version = ">= 1.0.1"
+    required_version = ">= 1.0.10"
 
     required_providers {
         linode = {
             source = "linode/linode"
-            version = ">= 1.18.0"
+            version = ">= 1.23.0"
         }
         random = {
             source = "hashicorp/random"
@@ -27,7 +27,7 @@ terraform {
         }
         aws = {
             source = "hashicorp/aws"
-            version = ">= 3.46.0"
+            version = ">= 3.64.2"
         }
     }
     backend "s3" {
