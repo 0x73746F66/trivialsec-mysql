@@ -29,16 +29,6 @@ tf:plan:
     reports:
       terraform: plans/tfplan.json
 
-s3:upload:
-  tags:
-    - linode
-  stage: build
-  script:
-    - make upload
-  only:
-    refs:
-      - main
-
 tf:apply:
   tags:
     - linode
