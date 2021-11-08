@@ -20,8 +20,10 @@ variable "aws_access_key_id" {
 variable "allowed_ip_addresses" { # space delimited
   description = "ALLOWED_IP_ADDRESSES"
   type        = string
+  default     = ""
 }
 variable "allowed_linode_username" { # space delimited
   description = "ALLOWED_LINODE_USERNAME"
   type        = string
+  default     = ""
 }
