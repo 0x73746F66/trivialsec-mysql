@@ -1,95 +1,25 @@
 #!/bin/sh
-# <UDF name="HOSTNAME" label="The hostname for the new Linode." />
+# <UDF name="FQDN" label="The hostname for the new Linode." />
 # <UDF name="AWS_ACCESS_KEY_ID" Label="AWS API Key ID" />
 # <UDF name="AWS_SECRET_ACCESS_KEY" Label="AWS Secret Access Key" />
-# <UDF name="AWS_REGION" Label="AWS Region" default="ap-southeast-2" />
+# <UDF name="AWS_REGION" Label="AWS Region" />
 # <UDF name="MYSQL_ROOT_PASSWORD" Label="MySQL root user password" />
-# <UDF name="MYSQL_PORT" Label="MySQL port" default="3306" />
+# <UDF name="MYSQL_PORT" Label="MySQL port" />
 # <UDF name="MYSQL_DATABASE" Label="MySQL database schema name" />
-# <UDF name="TIMEZONE" Label="Your timezone" example="Australia/Sydney (see a list at https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)" default="Etc/UTC" />
 # <UDF name="ALLOWED_IP_ADDRESSES" Label="MySQL allowed_ip_addresses" />
-
 set -ex
-exec >  >(tee -a /root/stackscript.log)
-exec 2> >(tee -a /root/stackscript.log >&2)
+exec >/root/stackscript.log 2>&1
 echo "Linode Variable Values:  LINODE_ID: $LINODE_ID,  LINODE_LISHUSERNAME: $LINODE_LISHUSERNAME,  LINODE_RAM: $LINODE_RAM,  LINODE_DATACENTERID:$LINODE_DATACENTERID"
+source <ssinclude StackScriptID="929970">
 
-system_primary_ip=$(ip route get 1 | egrep -o 'src [[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}\.[[:digit:]]{1,3}' | awk '{print $2;exit}')
-network_interface=$(cat /etc/network/interfaces | egrep "iface .* static" | awk '{print $2;exit}')
-
-function randomString {
-    if [ ! -n "$1" ];
-        then length=20
-        else length="$1"
-    fi
-    # Generate a random string
-    echo "$(</dev/urandom tr -dc A-Za-z0-9 | head -c $length)"
-}
-
-function setup_os() {
-    local BLOCK_COUNT=$LINODE_RAM*1024
-    echo "Setup swap..."
-    echo 1 > /proc/sys/vm/swappiness
-    # Create SWAP File as 
-    fallocate -l $LINODE_RAM\M /swapfile
-    dd if=/dev/zero of=/swapfile bs=1024 count=$BLOCK_COUNT
-    chmod 600 /swapfile
-    mkswap /swapfile
-    swapon /swapfile
-    echo "Setting hostname..."
-    echo ${HOSTNAME} > /etc/hostname
-    hostname -F /etc/hostname
-    echo $system_primary_ip ${HOSTNAME} | tee -a /etc/hosts
-    echo "Setting up timezone..."
-    apk add tzdata
-    cp /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
-    echo ${TIMEZONE} > /etc/timezone
-    apk del tzdata
-    echo "Harden SSH access..."
-    sed -i -e "s/#*PasswordAuthentication [no]*[yes]*/PasswordAuthentication no/" /etc/ssh/sshd_config
-    sed -i 's/#Banner none/Banner \/etc\/ssh\/banner/' /etc/ssh/sshd_config
-    echo 'AddressFamily inet' | tee -a /etc/ssh/sshd_config
-    cat << EOT > /etc/ssh/banner
-#################################################################
-#                 Welcome to ${HOSTNAME}
-# After this point you agree that all your activity is recorded
-#################################################################
-EOT
-    echo "" > /etc/motd
-    rc-service sshd restart
-}
 function add_packages() {
     echo "Adding packages..."
-    apk add --update ca-certificates openssl py-pip iptables lsof shorewall mysql mysql-client fail2ban
+    apk add --update ca-certificates openssl lsof
     update-ca-certificates --fresh
-    enable_fail2ban
-    pip install -U pip
-    pip install pipx
-    echo "Setup PATH..."
-    echo 'export PATH="$PATH:/root/.local/bin"' >> ~/.bashrc
-    export PATH="$PATH:/root/.local/bin"
-}
-function patch_os() {
-    echo "Patching..."
-    apk upgrade --update-cache --available
-    cat > /etc/periodic/daily/auto_update << EOF
-#!/bin/sh
-apk update -q && apk upgrade --update-cache --available -q
-EOF
-    chmod a+x /etc/periodic/daily/auto_update
-}
-function enable_fail2ban() {
-    echo "Setting up fail2ban..."
-    cd /etc/fail2ban
-    cp fail2ban.conf fail2ban.local
-    cp jail.conf jail.local
-    sed -i -e "s/backend = auto/backend = systemd/" /etc/fail2ban/jail.local
-    rc-service fail2ban start
-    rc-update add fail2ban default
 }
 function setup_aws() {
+    install_awscli
     echo "Setup awscli..."
-    pipx install awscli
     mkdir ~/.aws
   cat > ~/.aws/config <<CONFIG
 [default]
@@ -103,129 +33,65 @@ CREDS
     # Test AWS Credentials stored in Env vars
     echo $(aws sts get-caller-identity)
 }
-function mysql_install() {
-    echo "Setting up mysql..."
-    rc-update add mysql default
-    sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' << EOF | mysql_secure_installation
-      # current root password (emtpy after installation)
-    y # Set root password?
-    ${MYSQL_ROOT_PASSWORD} # new root password
-    ${MYSQL_ROOT_PASSWORD} # repeat root password
-    y # Remove anonymous users?
-    n # Disallow root login remotely?
-    y # Remove test database and access to it?
-    y # Reload privilege tables now?
-EOF
-    echo "CREATE DATABASE ${MYSQL_DATABASE};" | mysql -u root -p"${MYSQL_ROOT_PASSWORD}"
-    # allowed remote incoming connections
-    sed -i "s|.*bind-address\s*=.*|bind-address=0.0.0.0|g" /etc/mysql/my.cnf
-    # dont search for hostnames (performance)
-    sed -i "s|.*skip-networking.*|skip-networking|g" /etc/mysql/my.cnf
-    # disable innodb (performance)
-    sed -i -e 's/^#skip-innodb/skip-innodb/' /etc/mysql/my.cnf
-    local -r percent=90
-    local -r mem="$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)" # how much memory in MB this system has
-    local -r mymem="$((mem*percent/100))" # how much memory we'd like to tune mysql with
-    local -r mymemchunks="$((mymem/4))" # how many 4MB chunks we have to play with
+function mysql_configure() {
+    echo "Configuring mysql..."
+    local memory_allocate_percent=${1:-90}
+    local conf_path=${2:-/etc/my.cnf.d/custom.cnf}
+    local mem="$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)" # how much memory in MB this system has
+    local mymem="$((mem*memory_allocate_percent/100))" # how much memory we'd like to tune mysql with
+    local mymemchunks="$((mymem/4))" # how many 4MB chunks we have to play with
+    echo -e "skip-host-cache\nskip-name-resolve\nserver-id = 1\nlog_bin = /var/log/mysql/mysql-bin.log\nbinlog_format = ROW\nbinlog_do_db = ${MYSQL_DATABASE}" >> ${conf_path}
     # mysql config options we want to set to the percentages in the second list, respectively
-    local optlist=(key_buffer sort_buffer_size read_buffer_size read_rnd_buffer_size myisam_sort_buffer_size query_cache_size)
-    local distlist=(75 1 1 1 5 15)
-    for opt in "${optlist[@]}"; do
-        sed -i -e "/\[mysqld\]/,/\[.*\]/s/^${opt}/#${opt}/" /etc/mysql/my.cnf
-    done
-    for i in "${!optlist[*]}"; do
-        val="$(echo | awk "{print int((${distlist[$i]} * ${mymemchunks}/100))*4}")"
-        [ $val -lt 4 ] && val=4
-        config="${config}\n${optlist[$i]} = ${val}M"
-    done
-    config="${config}\nskip-host-cache\nskip-name-resolve\nserver-id = 1\nlog_bin = /var/log/mysql/mysql-bin.log\nbinlog_format = ROW\nbinlog_do_db = ${MYSQL_DATABASE}"
-    sed -i -e "s/\(\[mysqld\]\)/\1\n${config}\n/" /etc/mysql/my.cnf
+    key_buffer=$(echo | awk "{print int((75 * ${mymemchunks}/100))*4}")
+    query_cache=$(echo | awk "{print int((15 * ${mymemchunks}/100))*4}")
+    myisam_sort_buffer=$(echo | awk "{print int((5 * ${mymemchunks}/100))*4}")
+    echo "key_buffer_size         = ${key_buffer}M" >> ${conf_path}
+    echo "query_cache_size        = ${query_cache}M" >> ${conf_path}
+    echo "myisam_sort_buffer_size = ${myisam_sort_buffer}M" >> ${conf_path}
+    remaining=$(echo | awk "{print int((1 * ${mymemchunks}/100))*4}")
+    [ ${remaining} -lt 8 ] && remaining=8
+    echo "sort_buffer_size     = ${remaining}M" >> ${conf_path}
+    echo "read_buffer_size     = ${remaining}M" >> ${conf_path}
+    echo "read_rnd_buffer_size = ${remaining}M" >> ${conf_path}
+    rc-service mariadb restart
+    netstat -ltn
+
 }
-function mysql_create_user {
-    [ ! -n "$1" ] && {
-        printf "mysql_create_user() requires the root password as its first argument\n"
-        return 1;
-    }
-    [ ! -n "$2" ] && {
-        printf "mysql_create_user() requires username as the second argument\n"
-        return 1;
-    }
-    [ ! -n "$3" ] && {
-        printf "mysql_create_user() requires a password as the third argument\n"
-        return 1;
-    }
-    local -r db_root_password="$1" db_username="$2" db_user_password="$3"
-    echo "CREATE USER '${db_username}'@'localhost' IDENTIFIED BY '${db_user_password}';" | mysql -u root -p"${db_root_password}"
-}
-function mysql_grant_user {
-    [ ! -n "$1" ] && {
-        printf "mysql_create_user() requires the root password as its first argument\n"
-        return 1;
-    }
-    [ ! -n "$2" ] && {
-        printf "mysql_create_user() requires username as the second argument\n"
-        return 1;
-    }
-    [ ! -n "$3" ] && {
-        printf "mysql_create_user() requires a database as the third argument\n"
-        return 1;
-    }
-    local -r db_root_password="$1" db_username="$2" db_user_password="$3"
-    echo "GRANT ALL PRIVILEGES ON ${db_user_password}.* TO '${db_username}'@'localhost';" | mysql -u root -p"${db_root_password}"
-    echo "FLUSH PRIVILEGES;" | mysql -u root -p"${db_root_password}"
-}
-function configure_ports() {
-    configure_basic_firewall
-    for i in "${ALLOWED_IP_ADDRESSES[@]}"; do
+function configure_allowed_ip_addresses() {
+    apk -q add --update iptables
+    rc-update add iptables default
+    for i in $ALLOWED_IP_ADDRESSES; do
         iptables -A INPUT -p tcp -s ${i} --sport 1024:65535 -d ${system_primary_ip} --dport ${MYSQL_PORT} -m state --state NEW,ESTABLISHED -j ACCEPT
         iptables -A OUTPUT -p tcp -s ${system_primary_ip} --sport ${MYSQL_PORT} -d ${i} --dport 1024:65535 -m state --state ESTABLISHED -j ACCEPT
 
     done
     iptables -nvL
 }
-function setup_firewall() {
-    echo "Setting up firewall..."
-    # Add firewall and net (public) zone
-    echo "net		ipv4" >> /etc/shorewall/zones
-    # Link net zone to public interface
-    echo "net		${interface}" >> /etc/shorewall/interfaces
-    # Authorize outbound traffic
-    echo "\$FW		net		ACCEPT" >> /etc/shorewall/policy
-    # DROP all traffic coming from outside
-    echo "net		all		DROP	info" >> /etc/shorewall/policy
-    # REJECT anything else
-    echo "all		all		REJECT	info" >> /etc/shorewall/policy
-    # Authorize connection to ssh port
-    echo "ACCEPT	net		\$FW		tcp 22" >> /etc/shorewall/rules
-    # Authorize connection to mysql port
-    echo "ACCEPT	net		\$FW		tcp ${MYSQL_PORT}" >> /etc/shorewall/rules
-    rc-update add shorewall default
-    sed -i -e "s/STARTUP_ENABLED=No/STARTUP_ENABLED=Yes/" /etc/shorewall/shorewall.conf
-    rc-service shorewall start
-}
-function stackscript_cleanup {
-    rm -rf /tmp/* /var/cache/apk/*
-    rm /root/StackScript
-    rm /root/ssinclude*
-    echo "Installation complete!"
-}
-function main() {
-    setup_os
+function install() {
+    setup_swap ${LINODE_RAM}
+    setup_hostname ${FQDN}
+    setup_timezone UTC
+    harden_ssh
+    enable_fail2ban
     patch_os
+    enable_auto_updates
     add_packages
     setup_aws
-    mysql_install
+    mysql_install ${MYSQL_ROOT_PASSWORD}
+    mysql_configure
     setup_firewall
-    configure_ports
-
-    lsof -i :${MYSQL_PORT} || (
-        rc-service mysql stop
-        rc-service mysql start
-    )
-    netstat -ltn
-    echo $(date +'%F') > /root/.deployed
+    open_firewall_port 22
+    open_firewall_port ${MYSQL_PORT}
+    configure_allowed_ip_addresses
     echo "Stackscript finished"
-    stackscript_cleanup
+
 }
 
-main
+echo "Setup PATH..."
+echo 'export PATH="$PATH:/root/.local/bin"' >> ~/.bashrc
+export PATH="$PATH:/root/.local/bin"
+install
+rc-status
+stackscript_cleanup
+echo $(date +'%F') > /root/.deployed
+echo "Installation complete!"

@@ -17,7 +17,7 @@ resource "linode_stackscript" "mysql_main" {
   rev_note = "initial version"
 }
 resource "linode_instance" "mysql_main" {
-  label             = "mysql-main"
+  label             = local.mysql_main_hostname
   group             = "SaaS"
   tags              = ["SaaS"]
   region            = local.linode_default_region
@@ -32,11 +32,14 @@ resource "linode_instance" "mysql_main" {
   root_pass         = random_string.linode_main_password.result
   stackscript_id    = linode_stackscript.mysql_main.id
   stackscript_data  = {
-    "HOSTNAME" = local.mysql_main_hostname
-    "MYSQL_ROOT_PASSWORD" = random_string.mysql_main_password.result
-    "AWS_ACCESS_KEY_ID" = var.aws_access_key_id
+    "FQDN"                  = local.mysql_main_hostname
+    "MYSQL_DATABASE"        = local.mysql_database
+    "MYSQL_PORT"            = 3306
+    "AWS_REGION"            = local.aws_default_region
+    "MYSQL_ROOT_PASSWORD"   = random_string.mysql_main_password.result
+    "AWS_ACCESS_KEY_ID"     = var.aws_access_key_id
     "AWS_SECRET_ACCESS_KEY" = var.aws_secret_access_key
-    "ALLOWED_IP_ADDRESSES" = join(" ", [var.allowed_ip_addresses, local.allowed_ip_addresses]) # space delimited
+    "ALLOWED_IP_ADDRESSES"  = join(" ", [var.allowed_ip_addresses, local.allowed_ip_addresses]) # space delimited
   }
   alerts {
       cpu            = 90
