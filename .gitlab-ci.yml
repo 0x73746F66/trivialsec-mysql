@@ -1,7 +1,6 @@
 variables:
   AWS_REGION: ap-southeast-2
   AWS_ACCOUNT: 984310022655
-  LINODE_FIREWALL: 13219
 
 before_script:
   - terraform --version
@@ -10,7 +9,6 @@ before_script:
 stages:
   - build
   - deploy
-  - firewall
 
 tf:plan:
   tags:
@@ -45,16 +43,6 @@ tf:apply:
   dependencies:
     - "tf:plan"
   when: manual
-
-firewall:attach:
-  stage: firewall
-  tags:
-    - linode
-  only:
-    refs:
-      - main
-  script:
-    - make attach-firewall
 
 tf:destroy:
   stage: deploy
