@@ -8,57 +8,111 @@ before_script:
 
 stages:
   - build
-  - deploy
+  - deploy:main
+  - deploy:rr
 
-tf:plan:
+tf:plan:main:
   tags:
     - linode
   stage: build
   script:
-    - make plan
+    - make plan-main
   only:
     refs:
       - merge_request
       - main
   artifacts:
-    name: "tf:plan"
+    name: "tf:plan:main"
     paths:
-      - plans/.tfplan
+      - main/.tfplan
     reports:
-      terraform: plans/tfplan.json
+      terraform: main/tfplan.json
 
-tf:apply:
+tf:plan:rr:
   tags:
     - linode
-  stage: deploy
+  stage: build
   script:
-    - make apply
+    - make plan-rr
+  only:
+    refs:
+      - merge_request
+      - main
+  artifacts:
+    name: "tf:plan:rr"
+    paths:
+      - replica/.tfplan
+    reports:
+      terraform: replica/tfplan.json
+
+tf:apply:main:
+  tags:
+    - linode
+  stage: deploy:main
+  script:
+    - make apply-main
   only:
     refs:
       - main
   environment:
     name: linode
-    url: https://cloud.linode.com/search/?query=label:mysql
-    on_stop: "tf:destroy"
+    url: https://cloud.linode.com/search/?query=label:prd-main.trivialsec.com
+    on_stop: "tf:destroy:main"
   dependencies:
-    - "tf:plan"
+    - "tf:plan:main"
   when: manual
 
-tf:destroy:
-  stage: deploy
+tf:apply:rr:
+  tags:
+    - linode
+  stage: deploy:rr
+  script:
+    - make apply-rr
+  only:
+    refs:
+      - main
+  environment:
+    name: linode
+    url: https://cloud.linode.com/search/?query=label:prd-rr.trivialsec.com
+    on_stop: "tf:destroy:rr"
+  dependencies:
+    - "tf:plan:rr"
+  when: manual
+
+tf:destroy:main:
+  stage: deploy:main
   variables:
     GIT_STRATEGY: none
   tags:
     - linode
   script:
-    - make destroy
+    - make destroy-main
   when: manual
   environment:
     name: linode
     action: stop
   artifacts:
-    name: "tf:destroy"
+    name: "tf:destroy:main"
     paths:
-      - plans/.tfdestroy
+      - main/.tfdestroy
     reports:
-      terraform: plans/tfdestroy.json
+      terraform: main/tfdestroy.json
+
+tf:destroy:rr:
+  stage: deploy:rr
+  variables:
+    GIT_STRATEGY: none
+  tags:
+    - linode
+  script:
+    - make destroy-rr
+  when: manual
+  environment:
+    name: linode
+    action: stop
+  artifacts:
+    name: "tf:destroy:rr"
+    paths:
+      - replica/.tfdestroy
+    reports:
+      terraform: replica/tfdestroy.json

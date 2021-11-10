@@ -23,43 +23,70 @@ tfinstall:
 	sudo apt-get install -y terraform
 	terraform -install-autocomplete || true
 
-init:  ## Runs tf init tf
-	cd plans
+init: init-main init-rr ## Runs tf init tf
+
+init-main:
+	cd main
 	terraform init -reconfigure -upgrade=true
 
-plan: init ## Runs tf validate and tf plan
-	cd plans
+init-rr:
+	cd replica
+	terraform init -reconfigure -upgrade=true
+
+deploy: plan apply ## tf plan and apply -auto-approve -refresh=true
+
+plan: plan-main plan-rr ## Runs tf validate and tf plan
+
+plan-main: init-main
+	cd main
 	terraform init -reconfigure -upgrade=true
 	terraform validate
 	terraform plan -no-color -out=.tfplan
 	terraform show --json .tfplan | jq -r '([.resource_changes[]?.change.actions?]|flatten)|{"create":(map(select(.=="create"))|length),"update":(map(select(.=="update"))|length),"delete":(map(select(.=="delete"))|length)}' > tfplan.json
 
-apply-lastest: ## tf apply -auto-approve -refresh=true
-	cd plans
+plan-rr: init-rr
+	cd replica
+	terraform init -reconfigure -upgrade=true
+	terraform validate
+	terraform plan -no-color -out=.tfplan
+	terraform show --json .tfplan | jq -r '([.resource_changes[]?.change.actions?]|flatten)|{"create":(map(select(.=="create"))|length),"update":(map(select(.=="update"))|length),"delete":(map(select(.=="delete"))|length)}' > tfplan.json
+
+apply: apply-main apply-rr ## tf apply -auto-approve -refresh=true
+
+apply-main:
+	cd main
 	terraform apply -auto-approve -refresh=true .tfplan
 
-apply: plan ## tf apply -auto-approve -refresh=true
-	cd plans
+apply-rr:
+	cd replica
 	terraform apply -auto-approve -refresh=true .tfplan
 
-tail-log: ## tail the squid access log in prod
-	@$(shell ssh-keygen -R "prd-main.trivialsec.com")
-	@$(shell ssh-keyscan -H "prd-main.trivialsec.com" >> ~/.ssh/known_hosts)
-	ssh root@prd-main.trivialsec.com tail -f /var/log/syslog
+destroy: destroy-main destroy-rr ## tf destroy -auto-approve
 
-destroy: init ## tf destroy -auto-approve
-	cd plans
+destroy-main: init-main
+	cd main
 	terraform validate
 	terraform plan -destroy -no-color -out=.tfdestroy
 	terraform show --json .tfdestroy | jq -r '([.resource_changes[]?.change.actions?]|flatten)|{"create":(map(select(.=="create"))|length),"update":(map(select(.=="update"))|length),"delete":(map(select(.=="delete"))|length)}' > tfdestroy.json
 	terraform apply -auto-approve -destroy .tfdestroy
 
-attach-firewall:
+destroy-rr: init-rr
+	cd replica
+	terraform validate
+	terraform plan -destroy -no-color -out=.tfdestroy
+	terraform show --json .tfdestroy | jq -r '([.resource_changes[]?.change.actions?]|flatten)|{"create":(map(select(.=="create"))|length),"update":(map(select(.=="update"))|length),"delete":(map(select(.=="delete"))|length)}' > tfdestroy.json
+	terraform apply -auto-approve -destroy .tfdestroy
+
+attach-firewall: attachfw-main attachfw-rr
+
+attachfw-main:
 	curl -s -H "Content-Type: application/json" \
 		-H "Authorization: Bearer ${TF_VAR_linode_token}" \
-		-X POST -d '{"type": "linode", "id": $(shell curl -s -H "Authorization: Bearer ${TF_VAR_linode_token}" https://api.linode.com/v4/linode/instances | jq -r '.data[] | select(.label=="mysql-replica") | .id')}' \
+		-X POST -d '{"type": "linode", "id": $(shell curl -s -H "Authorization: Bearer ${TF_VAR_linode_token}" https://api.linode.com/v4/linode/instances | jq -r '.data[] | select(.label=="prd-rr.trivialsec.com") | .id')}' \
 		https://api.linode.com/v4/networking/firewalls/${LINODE_FIREWALL}/devices
+
+attachfw-rr:
 	curl -s -H "Content-Type: application/json" \
 		-H "Authorization: Bearer ${TF_VAR_linode_token}" \
-		-X POST -d '{"type": "linode", "id": $(shell curl -s -H "Authorization: Bearer ${TF_VAR_linode_token}" https://api.linode.com/v4/linode/instances | jq -r '.data[] | select(.label=="mysql-main") | .id')}' \
+		-X POST -d '{"type": "linode", "id": $(shell curl -s -H "Authorization: Bearer ${TF_VAR_linode_token}" https://api.linode.com/v4/linode/instances | jq -r '.data[] | select(.label=="prd-main.trivialsec.com") | .id')}' \
 		https://api.linode.com/v4/networking/firewalls/${LINODE_FIREWALL}/devices
