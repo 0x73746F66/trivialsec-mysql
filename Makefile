@@ -9,55 +9,30 @@ help: ## This help.
 
 .DEFAULT_GOAL := help
 
-init: init-main init-rr ## Runs tf init tf
-
-init-main:
-	cd main
+init: ## Runs tf init tf
+	cd plans
 	terraform init -reconfigure -upgrade=true
 
-init-rr:
-	cd replica
-	terraform init -reconfigure -upgrade=true
+output:
+	cd plans
+	terraform output mysql_replica_password
+	terraform output mysql_main_password
 
-deploy: plan apply ## tf plan and apply -auto-approve -refresh=true
+deploy: plan apply attach-firewall output ## tf plan and apply -auto-approve -refresh=true
 
-plan: plan-main plan-rr ## Runs tf validate and tf plan
-
-plan-main: init-main
-	cd main
+plan: init ## Runs tf validate and tf plan
+	cd plans
 	terraform init -reconfigure -upgrade=true
 	terraform validate
 	terraform plan -no-color -out=.tfplan
 	terraform show --json .tfplan | jq -r '([.resource_changes[]?.change.actions?]|flatten)|{"create":(map(select(.=="create"))|length),"update":(map(select(.=="update"))|length),"delete":(map(select(.=="delete"))|length)}' > tfplan.json
 
-plan-rr: init-rr
-	cd replica
-	terraform init -reconfigure -upgrade=true
-	terraform validate
-	terraform plan -no-color -out=.tfplan
-	terraform show --json .tfplan | jq -r '([.resource_changes[]?.change.actions?]|flatten)|{"create":(map(select(.=="create"))|length),"update":(map(select(.=="update"))|length),"delete":(map(select(.=="delete"))|length)}' > tfplan.json
-
-apply: apply-main apply-rr ## tf apply -auto-approve -refresh=true
-
-apply-main:
-	cd main
+apply: ## tf apply -auto-approve -refresh=true
+	cd plans
 	terraform apply -auto-approve -refresh=true .tfplan
 
-apply-rr:
-	cd replica
-	terraform apply -auto-approve -refresh=true .tfplan
-
-destroy: destroy-main destroy-rr ## tf destroy -auto-approve
-
-destroy-main: init-main
-	cd main
-	terraform validate
-	terraform plan -destroy -no-color -out=.tfdestroy
-	terraform show --json .tfdestroy | jq -r '([.resource_changes[]?.change.actions?]|flatten)|{"create":(map(select(.=="create"))|length),"update":(map(select(.=="update"))|length),"delete":(map(select(.=="delete"))|length)}' > tfdestroy.json
-	terraform apply -auto-approve -destroy .tfdestroy
-
-destroy-rr: init-rr
-	cd replica
+destroy: init ## tf destroy -auto-approve
+	cd plans
 	terraform validate
 	terraform plan -destroy -no-color -out=.tfdestroy
 	terraform show --json .tfdestroy | jq -r '([.resource_changes[]?.change.actions?]|flatten)|{"create":(map(select(.=="create"))|length),"update":(map(select(.=="update"))|length),"delete":(map(select(.=="delete"))|length)}' > tfdestroy.json

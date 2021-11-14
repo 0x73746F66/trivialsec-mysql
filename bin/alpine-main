@@ -10,7 +10,7 @@
 set -ex
 exec >/root/stackscript.log 2>&1
 echo "Linode Variable Values:  LINODE_ID: $LINODE_ID,  LINODE_LISHUSERNAME: $LINODE_LISHUSERNAME,  LINODE_RAM: $LINODE_RAM,  LINODE_DATACENTERID:$LINODE_DATACENTERID"
-source <ssinclude StackScriptID="929970">
+source <ssinclude StackScriptID="931877">
 
 function add_packages() {
     echo "Adding packages..."
@@ -54,14 +54,14 @@ function mysql_configure() {
     echo "read_buffer_size     = ${remaining}M" >> ${conf_path}
     echo "read_rnd_buffer_size = ${remaining}M" >> ${conf_path}
     rc-service mariadb restart
-    netstat -ltn
+    netstat -tulpn
     mysql -Bse "CREATE DATABASE ${MYSQL_DATABASE};"
     mysql -Bse "GRANT REPLICATION SLAVE ON *.* TO \"root\"@\"localhost\";"
     mysql -D mysql -Bse "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' WITH GRANT OPTION;"
     mysql -D mysql -Bse "DELETE FROM user WHERE User='root' AND Host='localhost';"
     mysql -Bse "FLUSH PRIVILEGES;"
     mysql -uroot -p"${MYSQL_ROOT_PASSWORD}" -Bse "SHOW MASTER STATUS \G;"
-
+    #TODO backup datadir
 }
 function install() {
     harden_ssh
@@ -74,7 +74,7 @@ function install() {
 EOT
     export PATH="$PATH:/root/.local/bin"
     echo 'export PATH="$PATH:/root/.local/bin"' >> ~/.profile
-    echo -e 'w\necho\niostat\necho\nmpstat\necho\ndf' >> ~/.profile
+    echo -e "/sbin/ifconfig eth0 | awk '/inet / { print \$2 }' | sed 's/addr://'\necho\nw\necho\niostat\necho\nmpstat\necho\ndf\necho\nfree\necho\nnetstat -tulpn" >> ~/.profile
     setup_swap ${LINODE_RAM}
     setup_hostname ${FQDN}
     setup_timezone UTC

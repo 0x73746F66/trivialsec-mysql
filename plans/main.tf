@@ -32,7 +32,7 @@ terraform {
     }
     backend "s3" {
         bucket = "stateful-trivialsec"
-        key    = "terraform/mysql-replica"
+        key    = "terraform/mysql"
         region  = "ap-southeast-2"
     }
 }

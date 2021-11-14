@@ -6,6 +6,7 @@ locals {
     linode_default_type     = "g6-nanode-1"
     # linode_default_type     = "g6-standard-1"
     route53_hosted_zone     = "Z04169281YCJD2GS4F5ER"
-    mysql_hostname          = "prd-rr.trivialsec.com"
+    main_hostname           = "prd-main.trivialsec.com"
+    replica_hostname        = "prd-rr.trivialsec.com"
     mysql_database          = "trivialsec"
 }

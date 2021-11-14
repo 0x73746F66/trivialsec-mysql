@@ -10,7 +10,7 @@
 set -ex
 exec >/root/stackscript.log 2>&1
 echo "Linode Variable Values:  LINODE_ID: $LINODE_ID,  LINODE_LISHUSERNAME: $LINODE_LISHUSERNAME,  LINODE_RAM: $LINODE_RAM,  LINODE_DATACENTERID:$LINODE_DATACENTERID"
-source <ssinclude StackScriptID="929970">
+source <ssinclude StackScriptID="931877">
 
 function add_packages() {
     echo "Adding packages..."
@@ -54,7 +54,7 @@ function mysql_configure_replica() {
     echo "read_buffer_size     = ${remaining}M" >> ${conf_path}
     echo "read_rnd_buffer_size = ${remaining}M" >> ${conf_path}
     rc-service mariadb restart
-    netstat -ltn
+    netstat -tulpn
     local main_passwd=$(ssm_get_parameter '/Prod/Deploy/trivialsec/mysql_main_password')
     mysql -D mysql -Bse "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}' WITH GRANT OPTION;"
     mysql -Bse "FLUSH PRIVILEGES;"
@@ -75,7 +75,7 @@ function install() {
 EOT
     export PATH="$PATH:/root/.local/bin"
     echo 'export PATH="$PATH:/root/.local/bin"' >> ~/.profile
-    echo -e 'w\necho\niostat\necho\nmpstat\necho\ndf' >> ~/.profile
+    echo -e "/sbin/ifconfig eth0 | awk '/inet / { print \$2 }' | sed 's/addr://'\necho\nw\necho\niostat\necho\nmpstat\necho\ndf\necho\nfree\necho\nnetstat -tulpn" >> ~/.profile
     setup_swap ${LINODE_RAM}
     setup_hostname ${FQDN}
     setup_timezone UTC
