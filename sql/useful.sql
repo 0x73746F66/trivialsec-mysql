@@ -92,15 +92,15 @@ left join plans p on a.account_id = p.account_id
 
 SELECT 
 	j.job_run_id,
-    d.domain_id,
-    d.parent_domain_id,
-    d.name,
+    d.domain_monitoring_id,
+    d.domain_name,
 	j.account_id,
-	j.project_id,
+	d.project_id,
 	j.state,
 	j.node_id,
 	j.priority,
     j.queue_data ->> "$.scan_type" AS scan_type,
+    j.service_type_id,
     j.queue_data ->> "$.service_type_name" AS service_type_name,
     j.queue_data ->> "$.service_type_category" AS service_type_category,
 	j.created_at,
@@ -108,15 +108,16 @@ SELECT
 	j.updated_at,
 	j.completed_at,
 	j.worker_message,
-	d.source,
+	d.enabled,
+	d.schedule,
     j.queue_data ->> "$.report_summary" AS report_summary,
     j.queue_data ->> "$.job_uuid" AS uuid,
     j.queue_data ->> "$.on_demand" AS on_demand,
-    j.queue_data ->> "$.scan_next" AS scan_next,
-    d.deleted
+    j.queue_data ->> "$.scan_next" AS scan_next
 FROM job_runs j
-LEFT JOIN domains d ON j.queue_data ->> "$.target" = d.name
-ORDER BY d.domain_id
+LEFT JOIN domain_monitoring d ON j.queue_data ->> "$.target" = d.domain_name
+WHERE j.project_id = 1
+ORDER BY d.domain_name
 
 -- db size
 
@@ -124,4 +125,14 @@ SELECT table_schema "DB Name",
         ROUND(SUM(data_length + index_length) / 1024 / 1024, 1) "DB Size in MB" 
 FROM information_schema.tables 
 GROUP BY table_schema; 
+
+-- clear projects
+
+truncate projects;
+truncate job_runs;
+truncate findings;
+truncate finding_watchers;
+truncate finding_notes;
+truncate finding_details;
+truncate domain_monitoring;
 

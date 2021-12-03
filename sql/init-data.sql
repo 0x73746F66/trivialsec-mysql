@@ -11,7 +11,7 @@ INSERT INTO members_roles ( `member_id`, `role_id` ) VALUES ( 1, 1 );
 INSERT INTO members_roles ( `member_id`, `role_id` ) VALUES ( 1, 5 );
 INSERT INTO api_keys (`api_key`, `api_key_secret`, `comment`, `member_id`, `active`) VALUES ('0CBD6369526457CEBEA116273EBF1FCB', 'aca3d029ee5650eb8f8467aa22136e5d', 'public-api', 1, 1);
 INSERT INTO webhooks (`account_id`, `webhook_secret`, `comment`, `target`, `active`) VALUES (1, '38B7329E11F45058A6D4389AC792631A', 'webhook', 'https://api.trivialsec/webhooks/trivialsec', 1);
-INSERT INTO plans (`account_id`, `name`, `stripe_customer_id`) VALUES (1, 'Internal', 'cus_IjA67Itbk3PAjp');
+INSERT INTO plans (`account_id`, `name`, `stripe_customer_id`) VALUES (1, 'Internal', 'cus_Kep0PM2MBd7g37');
 INSERT INTO account_config (
     `account_id`
 ) VALUES (
@@ -5656,6 +5656,26 @@ VALUES (
         'daily',
         'feodotracker.abuse.ch/blocklist/',
         'coSntacPtAmeM@abuse.ch',
+        1,
+        NULL,
+        '2020-05-21 23:55:03'
+    ),
+(
+        280,
+        'ISC SANS api intelfeed',
+        'threat_intel',
+        'SANS DShield',
+        'https://isc.sans.edu/api/intelfeed?json',
+        'http',
+        NULL,
+        NULL,
+        200,
+        'ok',
+        'json_sans_intelfeed',
+        'Malicious Activity Detected (Honeypot)',
+        'daily',
+        'isc.sans.edu/api/#intelfeed',
+        NULL,
         1,
         NULL,
         '2020-05-21 23:55:03'

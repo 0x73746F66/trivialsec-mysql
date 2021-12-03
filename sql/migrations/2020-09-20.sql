@@ -10,4 +10,4 @@ ALTER TABLE plans ADD COLUMN `stripe_card_last4` INT(4) default NULL AFTER `stri
 ALTER TABLE plans ADD COLUMN `stripe_card_expiry_month` INT(2) default NULL AFTER `stripe_card_last4`;
 ALTER TABLE plans ADD COLUMN `stripe_card_expiry_year` INT(4) default NULL AFTER `stripe_card_expiry_month`;
 
-UPDATE plans SET stripe_customer_id = 'cus_I3nKApncfIPCkf' WHERE account_id = 1;
+UPDATE plans SET stripe_customer_id = 'cus_Kep0PM2MBd7g37' WHERE account_id = 1;
