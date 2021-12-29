@@ -22,7 +22,6 @@ deploy: plan apply attach-firewall output ## tf plan and apply -auto-approve -re
 
 plan: init ## Runs tf validate and tf plan
 	cd plans
-	terraform init -reconfigure -upgrade=true
 	terraform validate
 	terraform plan -no-color -out=.tfplan
 	terraform show --json .tfplan | jq -r '([.resource_changes[]?.change.actions?]|flatten)|{"create":(map(select(.=="create"))|length),"update":(map(select(.=="update"))|length),"delete":(map(select(.=="delete"))|length)}' > tfplan.json
@@ -82,15 +81,15 @@ docker-purge: ## thorough docker environment cleanup
 	sudo service docker start
 
 db-create: ## applies mysql schema and initial data
-	docker-compose exec mysql-main bash -c "mysql -uroot -p'$(MYSQL_MAIN_PASSWORD)' -q -s < /tmp/sql/schema.sql"
-	docker-compose exec mysql-main bash -c "mysql -uroot -p'$(MYSQL_MAIN_PASSWORD)' -q -s < /tmp/sql/init-data.sql"
+	docker-compose exec mysql-main bash -c "mysql -uroot -p'$(TF_VAR_mysql_main_password)' -q -s < /tmp/sql/schema.sql"
+	docker-compose exec mysql-main bash -c "mysql -uroot -p'$(TF_VAR_mysql_main_password)' -q -s < /tmp/sql/init-data.sql"
 
 db-rebuild: ## runs drop tables sql script, then applies mysql schema and initial data
 	docker-compose up -d mysql-main
 	sleep 5
-	docker-compose exec mysql-main bash -c "mysql -uroot -p'$(MYSQL_MAIN_PASSWORD)' -q -s < /tmp/sql/drop-tables.sql"
-	docker-compose exec mysql-main bash -c "mysql -uroot -p'$(MYSQL_MAIN_PASSWORD)' -q -s < /tmp/sql/schema.sql"
-	docker-compose exec mysql-main bash -c "mysql -uroot -p'$(MYSQL_MAIN_PASSWORD)' -q -s < /tmp/sql/init-data.sql"
+	docker-compose exec mysql-main bash -c "mysql -uroot -p'$(TF_VAR_mysql_main_password)' -q -s < /tmp/sql/drop-tables.sql"
+	docker-compose exec mysql-main bash -c "mysql -uroot -p'$(TF_VAR_mysql_main_password)' -q -s < /tmp/sql/schema.sql"
+	docker-compose exec mysql-main bash -c "mysql -uroot -p'$(TF_VAR_mysql_main_password)' -q -s < /tmp/sql/init-data.sql"
 
 update: ## pulls images
 	docker-compose pull

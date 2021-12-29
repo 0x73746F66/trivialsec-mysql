@@ -15,13 +15,13 @@ services:
     command: 'mysqld --bind-address=0.0.0.0'
     volumes:
       - mysql-replica:/var/lib/mysql
-      - ./docker/mysql/replica.cnf:/etc/mysql/conf.d/replica.cnf
+      - ./docker/mysql/replica.cnf:/etc/mysql/conf.d/my.cnf
     ports:
       - 33306:3306
     expose:
       - 3306
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_REPLICA_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${TF_VAR_mysql_replica_password}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
     security_opt:
       - seccomp:"./docker/mysql/seccomp.json"
@@ -36,15 +36,12 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
-        delay: 0s
         max_attempts: 10
-        window: 3s
       resources:
         limits:
           cpus: '1.00'
           memory: 1GB
         reservations:
-          cpus: '0.50'
           memory: 500M
 
   mysql-main:
@@ -55,14 +52,14 @@ services:
     command: 'mysqld --bind-address=0.0.0.0'
     volumes:
       - mysql-main:/var/lib/mysql
-      - ./docker/mysql/main.cnf:/etc/mysql/conf.d/main.cnf
+      - ./docker/mysql/main.cnf:/etc/mysql/conf.d/my.cnf
       - ./sql:/tmp/sql
     ports:
       - 3306:3306
     expose:
       - 3306
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_MAIN_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${TF_VAR_mysql_main_password}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
     security_opt:
       - seccomp:"./docker/mysql/seccomp.json"
@@ -77,15 +74,12 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
-        delay: 0s
         max_attempts: 10
-        window: 3s
       resources:
         limits:
           cpus: '1.00'
           memory: 1GB
         reservations:
-          cpus: '0.50'
           memory: 500M
 
 volumes:
